@@ -17,22 +17,21 @@ spec:
     spec:
       containers:
         - name: workload-steal-worker
-          image: localhost/workloadstealworker:alpha1
+          image: workloadstealworker:alpha1
           imagePullPolicy: IfNotPresent
           env:
           - name: NATS_URL
-            value: "nats://nats-server:4222"  # Replace with your NATS server URL
+            value: "demo.nats.io:4222"  
           - name: NATS_SUBJECT
-            value: "WorkStealingPod"  # Default log level
+            value: "WorkStealingPod"  
           - name: WORK_LOAD_STEAL_LABLE
-            value: "WorkLoadSteal"  # Leave empty for in-cluster config
+            value: "WorkLoadSteal"  
           resources:
-          requests:
-            memory: "64Mi"
-            cpu: "250m"
-          limits:
-            memory: "128Mi"
-            cpu: "500m"
-          ports:
-            - containerPort: 8443
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          
           

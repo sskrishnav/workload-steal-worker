@@ -8,11 +8,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	tlsKeyPath  string
-	tlsCertPath string
-)
-
 func main() {
 	stopChan := make(chan bool)
 
@@ -26,6 +21,7 @@ func main() {
 	}
 
 	go log.Fatal(informer.Start(stopChan))
+	<-stopChan
 }
 
 func init() {
@@ -36,7 +32,7 @@ func init() {
 
 func getENVValue(envKey string) string {
 	// Read environment variables
-	value := viper.GetString("NATS_URL")
+	value := viper.GetString(envKey)
 	if value == "" {
 		message := fmt.Sprintf("%s environment variable is not set", envKey)
 		log.Fatal(message)

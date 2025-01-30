@@ -62,10 +62,10 @@ func (n *consume) Start(stopChan chan<- bool) error {
 		return err
 	}
 	defer natsConnect.Close()
-	slog.Info("Connected to NATS server")
+	slog.Info("Connected to NATS server", "server", n.nconfig.NATSURL)
 
 	var pod corev1.Pod
-	slog.Info("Subscribe to Pod creation messages...")
+	slog.Info("Subscribe to Pod creation messages...", "subject", n.nconfig.NATSSubject)
 	// Subscribe to the subject
 	natsConnect.Subscribe(n.nconfig.NATSSubject, func(msg *nats.Msg) {
 		slog.Info("Received message", "subject", n.nconfig.NATSSubject, "data", string(msg.Data))
