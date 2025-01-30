@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workload-steal-worker
+  namespace: hiro
+  labels:
+    app: workload-steal-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workload-steal-worker
+  template:
+    metadata:
+      labels:
+        app: workload-steal-worker
+    spec:
+      containers:
+        - name: workload-steal-worker
+          image: localhost/workloadstealworker:alpha1
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: NATS_URL
+            value: "nats://nats-server:4222"  # Replace with your NATS server URL
+          - name: NATS_SUBJECT
+            value: "WorkStealingPod"  # Default log level
+          - name: WORK_LOAD_STEAL_LABLE
+            value: "WorkLoadSteal"  # Leave empty for in-cluster config
+          resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          ports:
+            - containerPort: 8443
+          
