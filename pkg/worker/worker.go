@@ -9,6 +9,7 @@ import (
 
 	nats "github.com/nats-io/nats.go"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -64,16 +65,25 @@ func (n *consume) Start(stopChan chan<- bool) error {
 	defer natsConnect.Close()
 	slog.Info("Connected to NATS server", "server", n.nconfig.NATSURL)
 
-	var pod corev1.Pod
 	slog.Info("Subscribe to Pod creation messages...", "subject", n.nconfig.NATSSubject)
 	// Subscribe to the subject
 	natsConnect.Subscribe(n.nconfig.NATSSubject, func(msg *nats.Msg) {
+		var pod corev1.Pod
 		slog.Info("Received message", "subject", n.nconfig.NATSSubject, "data", string(msg.Data))
 		// Deserialize the entire Pod metadata to JSON
-		if err := json.Unmarshal(msg.Data, &pod); err != nil {
-			slog.Error("Failed to decode Pod from message", "error", err)
+		err := json.Unmarshal(msg.Data, &pod)
+		if err != nil {
+			slog.Error("Failed to Unmarshal Pod from rawData", "error", err, "rawData", string(msg.Data))
 			return
 		}
+		slog.Info("Deserialized Pod", "pod", pod)
+
+		if !(CreateNamespace(n.cli, pod.Namespace)) {
+			slog.Error("Failed to create Namespace", "error", err)
+			return
+		}
+
+		sterilizePodInplace(&pod)
 		// Create the Pod in Kubernetes
 		createdPod, err := n.cli.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 		if err != nil {
@@ -86,6 +96,43 @@ func (n *consume) Start(stopChan chan<- bool) error {
 		slog.Info("Succefully stole the wrokload", "Pod", createdPod)
 	})
 	select {}
+}
+
+func CreateNamespace(cli *kubernetes.Clientset, namespace string) bool {
+	// Ensure Namespace exists before creating the Pod
+	_, err := cli.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// Namespace does not exist, create it
+			slog.Info("Namespace not found, creating it", "namespace", namespace)
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+
+			_, err := cli.CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
+			if err != nil {
+				slog.Error("Failed to create namespace", "namespace", namespace, "error", err)
+				return false
+			}
+		} else {
+			// Other errors (e.g., API failure)
+			slog.Error("Failed to check namespace existence", "namespace", namespace, "error", err)
+			return false
+		}
+	}
+	return true
+}
+
+func sterilizePodInplace(pod *corev1.Pod) {
+	newPodObjectMeta := metav1.ObjectMeta{
+		Name:        pod.Name,
+		Namespace:   pod.Namespace,
+		Labels:      pod.Labels,
+		Annotations: pod.Annotations,
+	}
+	pod.ObjectMeta = newPodObjectMeta
 }
 
 // pollPodStatus polls the status of a Pod until it is Running or a timeout occurs
